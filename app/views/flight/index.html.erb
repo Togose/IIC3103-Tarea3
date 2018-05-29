@@ -5,8 +5,6 @@
     <meta name="viewport" content="initial-scale=1.0">
     <meta charset="utf-8">
     <style>
-      /* Always set the map height explicitly to define the size of the div
-       * element that contains the map. */
       #map {
         height: 100%;
       }
@@ -16,85 +14,189 @@
         margin: 0;
         padding: 0;
       }
-      #legend {
-        font-family: Arial, sans-serif;
-        background: #fff;
-        padding: 10px;
-        margin: 10px;
-        border: 3px solid #000;
-      }
-      #legend h3 {
-        margin-top: 0;
-      }
-      #legend img {
-        vertical-align: middle;
-      }
     </style>
   </head>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.0.1/socket.io.js"></script>
   <body>
     <div id="map"></div>
-    <div id="legend"><h3>Legend</h3></div>
-    <script>
+    <script type="text/javascript">
+        var url = 'wss://integracion-tarea-3.herokuapp.com';
+        const socket = io(
+        url,
+        {
+          path: "/flights",
+          reconnect: true,
+          transports: ['websocket', 'polling']
+        }
+        );
+
+        socket.on("connect", function () {
+          console.log("hola");
+        });
 
         var map;
+        var flights = {};
+        var airports = {};
+        var planes = {};
+        var flightsInfo = {};
+        var infoWindows = [];
+
+        function addInfoWindow(marker, message, infoWindows) {
+
+            var infoWindow = new google.maps.InfoWindow({
+                content: message
+            });
+
+            infoWindows.push(infoWindow)
+
+            google.maps.event.addListener(marker, 'click', function () {
+                infoWindows.forEach(function(infow) {
+                    infow.close(map);
+                });
+                infoWindow.open(map, marker);
+            });
+        }
+
+        function getRandomColor() {
+          var letters = '0123456789ABCDEF';
+          var color = '#';
+          for (var i = 0; i < 6; i++) {
+            color += letters[Math.floor(Math.random() * 16)];
+          }
+          return color;
+        }
+
         function initMap() {
+            var airplane = 'https://maps.google.com/mapfiles/kml/pal2/icon56.png';
+            var airport = 'https://maps.google.com/mapfiles/kml/pal2/icon48.png';
             map = new google.maps.Map(document.getElementById('map'), {
             center: {lat: -33.4726900, lng: -70.6472400},
             zoom: 6
         });
 
-        var iconBase = 'https://maps.google.com/mapfiles/kml/shapes/';
-        var icons = {
-          parking: {
-            name: 'Parking',
-            icon: iconBase + 'parking_lot_maps.png'
-          },
-          library: {
-            name: 'Library',
-            icon: iconBase + 'library_maps.png'
-          },
-          info: {
-            name: 'Info',
-            icon: iconBase + 'info-i_maps.png'
-          }
-        };
+        airportsMarkers = {}
 
-        var features = [
-          {
-            position: new google.maps.LatLng(-33.4826800, -70.6072500),
-            type: 'info'
-          }, {
-            position: new google.maps.LatLng(-33.5126700, -70.6872300),
-            type: 'library'
-          }, {
-            position: new google.maps.LatLng(-33.3926500, -70.65972200),
-            type: 'parking'
-          }
-        ];
+        socket.emit("AIRPORTS");
 
-        // Create markers.
-        features.forEach(function(feature) {
-          var marker = new google.maps.Marker({
-            position: feature.position,
-            icon: icons[feature.type].icon,
-            map: map
-          });
+        socket.on("AIRPORTS", function(AIRPORTS) {
+          for (var code in AIRPORTS){
+            airports[code] = AIRPORTS[code];
+            airportMarker = new google.maps.Marker({
+              position: {lat: airports[code]['airport_position'][0], lng: airports[code]['airport_position'][1]},
+              map: map,
+              icon: airport
+            });
+
+            name = airports[code]['name'];
+            city = airports[code]['city'];
+            country = airports[code]['country'];
+            country_code = airports[code]['country_code'];
+            airport_code = airports[code]['airport_code'];
+
+            var airportInfo = '<div id="content">' +
+              '<div id="siteNotice">' +
+              '</div>' +
+              '<h1 id="firstHeading" class="firstHeading">' + code + '</h1>' +
+              '<div id="bodyContent">' +
+                '<p>' + 'Name: ' + name + '<p>'
+                + 'City: ' + city + '<p>'
+                + 'Country: ' + country + '<p>'
+                + 'Country Code: ' + country_code + '<p>'
+                + 'Airport Code: ' + airport_code + '<p>'
+              '</div>' +
+            '</div>';
+
+            addInfoWindow(airportMarker, airportInfo, infoWindows)
+
+            airportsMarkers[code] = airportMarker;
+
+          };
         });
 
-        var legend = document.getElementById('legend');
-        for (var key in icons) {
-            var type = icons[key];
-            var name = type.name;
-            var icon = type.icon;
-            var div = document.createElement('div');
-            div.innerHTML = '<img src="' + icon + '"> ' + name;
-            legend.appendChild(div);
-        }
+        socket.emit("FLIGHTS");
+        socket.on("FLIGHTS", function(FLIGHTS) {
+          for (var flight in FLIGHTS){
 
-        map.controls[google.maps.ControlPosition.RIGHT_BOTTOM].push(legend);
+            flights[flight] = FLIGHTS[flight];
+            code = flights[flight]['code'];
+            airline = flights[flight]['airline'];
+            origin = flights[flight]['origin']['name'];
+            destination = flights[flight]['destination']['name'];
+            plane = flights[flight]['plane'];
+            seats = flights[flight]['seats'];
+
+            flightInfo = '<div id="content">' +
+              '<div id="siteNotice">' +
+              '</div>' +
+              '<h1 id="firstHeading" class="firstHeading">' + code + '</h1>' +
+              '<div id="bodyContent">' +
+                '<p>' + 'Name: ' + airline + '<p>'
+                + 'Origin: ' + origin + '<p>'
+                + 'Destination: ' + destination + '<p>'
+                + 'Plane: ' + plane + '<p>'
+                + 'Seats: ' + seats + '<p>'
+              '</div>' +
+            '</div>';
+
+            flightsInfo[code] = flightInfo;
+
+            var line = new google.maps.Polyline({
+                path: [
+                    new google.maps.LatLng(
+                    flights[flight]['destination']['airport_position'][0],
+                    flights[flight]['destination']['airport_position'][1]),
+                    new google.maps.LatLng(
+                    flights[flight]['origin']['airport_position'][0],
+                    flights[flight]['origin']['airport_position'][1])
+                ],
+                strokeColor: "#FF0000",
+                strokeOpacity: 1.0,
+                strokeWeight: 5,
+                map: map
+            });
+
+          };
+        });
+
+        socket.on("POSITION", function(POSITION) {
+          found = false;
+          latlng = new google.maps.LatLng(POSITION["position"][0],POSITION["position"][1]);
+          flight = null;
+          for (var plane in planes){
+            vuelo = planes[plane]
+            if (vuelo.code === POSITION.code) {
+              found = true;
+              flight = vuelo;
+            }
+          }
+          if (found === true) {
+            flight.marker.setPosition(latlng)
+            path = flight.line.getPath()
+            path.push(latlng)
+          }
+          else {
+            line = new google.maps.Polyline({
+                path: [latlng],
+                strokeColor: getRandomColor(),
+                strokeOpacity: 1.0,
+                strokeWeight: 2,
+                map: map
+            });
+            marker = new google.maps.Marker({
+              position: latlng,
+              map: map,
+              icon: airplane })
+            addInfoWindow(marker, flightsInfo[POSITION.code], infoWindows)
+            planes[POSITION.code] = {
+              marker: marker,
+              code: POSITION.code,
+              line: line
+            }
+          }
+        });
       }
     </script>
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD4gj-F97rVIEBYtHyFlhuoX192lwBd3n4&callback=initMap"
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCkIAtISrnu9sseYx1UaCwEkoKboLTnvf8&callback=initMap"
     async defer>
     </script>
   </body>

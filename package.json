@@ -1,5 +1,7 @@
 {
   "name": "tarea3",
   "private": true,
-  "dependencies": {}
+  "dependencies": {
+    "socket.io": "^2.1.1"
+  }
 }
